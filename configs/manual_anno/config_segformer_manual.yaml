@@ -9,7 +9,7 @@ run: manual_bin_segformer_b3
 logging:
   save_dir: ./results/logging/
   wandb_logging: True
-  wandb_project_name: ukb_surgery_MI
+  wandb_project_name: GauzeSeg
 
 dataset:
   data_root_dir: ./data

@@ -2,7 +2,7 @@ run: test_old_vid_old_code_filter_only_gauze
 logging:
   save_dir: ./results/logging/
   wandb_logging: True
-  wandb_project_name: ukb_surgery
+  wandb_project_name: GauzeSeg
 
 dataset:
   data_root_dir: ./data

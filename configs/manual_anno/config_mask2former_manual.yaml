@@ -9,7 +9,7 @@ run: test_manual_bin_mask2former_swin_tiny
 logging:
   save_dir: ./results/logging/
   wandb_logging: True
-  wandb_project_name: ukb_surgery_MI
+  wandb_project_name: GauzeSeg
 
 dataset:
   data_root_dir: ./data

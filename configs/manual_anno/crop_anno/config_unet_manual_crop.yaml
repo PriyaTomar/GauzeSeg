@@ -8,7 +8,7 @@ run: crop_manual_bin_vanilla_60warmup
 logging:
   save_dir: ./results/logging/
   wandb_logging: True
-  wandb_project_name: ukb_surgery_MI
+  wandb_project_name: GauzeSeg
 
 dataset:
   data_root_dir: ./data

@@ -1,0 +1,12 @@
+# Minimal runtime deps for GauzeSeg (install PyTorch for your CUDA build separately if needed)
+numpy
+pandas
+opencv-python-headless
+Pillow
+PyYAML
+coloredlogs
+wandb
+torchmetrics
+pytorch-lightning>=2.0
+transformers
+timm

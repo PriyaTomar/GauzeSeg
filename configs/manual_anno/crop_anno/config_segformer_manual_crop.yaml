@@ -1,0 +1,232 @@
+define: &out_seg_channels 1
+define: &anno_label_mapping {1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 1}
+define: &img_resize [512, 512]
+define: &batch_size 16
+define: &warmup_epochs 30
+
+use_deterministic: False
+
+run: crop_manual_bin_segformer_30warmup
+logging:
+  save_dir: ./results/logging/
+  wandb_logging: True
+  wandb_project_name: ukb_surgery_MI
+
+dataset:
+  data_root_dir: ./data
+  dataset_name: manual_annotations
+  input_dir_name: img
+  anno_dir_name: masks_machine
+
+dataloader:
+  manual_anno: True
+  split_config:
+    train_idx: [1, 5, 6, 9, 14, 16] #[1, 4, 6, 9, 10, 11, 14, 16, 18, 19, 21] 
+    val_idx:  [10, 22] #[3, 17] #
+    test_idx: [3, 11, 17, 23] #[10, 11, 22, 23]
+    test2_idx: [4, 18, 19, 21]
+
+  save_transformed_data: false
+  batch_size: *batch_size
+  num_workers: 16
+  transforms:
+    test:
+      # order is data->input/anno transforms 
+      data_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: CropBlackBorders
+          args: 
+        - module: torchvision.transforms.v2
+          name: Resize
+          args: {size: *img_resize }
+
+      anno_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: ReplaceClassMapping
+          args: {
+            label_mapping: *anno_label_mapping
+            }
+        # - module: seg2ml.data.gauze.transforms
+        #   name: MapAnnotationBinary
+        #   args: {out_seg_channels: *out_seg_channels} 
+    train:
+      # order is data->input/anno transforms 
+      data_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: CropBlackBorders
+          args: 
+        - module: torchvision.transforms.v2
+          name: RandomApply
+          args: 
+            p: 0.5
+            transforms: 
+              - module: seg2ml.data.gauze.transforms
+                name: PadAndRandomCrop
+                args: 
+                  crop_size: 512
+        - module: torchvision.transforms.v2
+          name: RandomHorizontalFlip
+          args: {p: 0.5}
+        - module: torchvision.transforms.v2
+          name: RandomVerticalFlip
+          args: {p: 0.5}
+        - module: torchvision.transforms.v2
+          name: Resize 
+          args: {size: *img_resize }
+
+      input_transforms:
+        - module: torchvision.transforms.v2
+          name: GaussianBlur
+          args: 
+            kernel_size: 11
+            sigma:  [0.001, 7.0] 
+        - module: torchvision.transforms.v2
+          name: ColorJitter
+          args: 
+            brightness: 0.9
+            contrast: 0.5
+            saturation: 0.5 
+            hue: 0.05
+            
+      anno_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: ReplaceClassMapping
+          args: {
+            label_mapping: *anno_label_mapping
+            }
+        # - module: seg2ml.data.gauze.transforms
+        #   name: MapAnnotationBinary
+        #   args: {out_seg_channels: *out_seg_channels}
+    warmup_train:
+      # order is data->input/anno transforms 
+      data_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: CropBlackBorders
+          args: 
+        - module: seg2ml.data.gauze.transforms
+          name: CropPadClassBox
+          args: 
+            class_labels: [4,5,6] #replace labels not in class lables with replace value
+            label_replace_value: 0
+            pad_strategy: image
+        - module: torchvision.transforms.v2
+          name: RandomHorizontalFlip
+          args: {p: 0.5}
+        - module: torchvision.transforms.v2
+          name: RandomVerticalFlip
+          args: {p: 0.5}
+        - module: torchvision.transforms.v2
+          name: Resize 
+          args: {size: *img_resize }
+
+      input_transforms:
+        - module: torchvision.transforms.v2
+          name: GaussianBlur
+          args: 
+            kernel_size: 11
+            sigma:  [0.001, 7.0] 
+        - module: torchvision.transforms.v2
+          name: ColorJitter
+          args: 
+            brightness: 0.9
+            contrast: 0.5
+            saturation: 0.5 
+            hue: 0.05
+            
+      anno_transforms:
+        - module: seg2ml.data.gauze.transforms
+          name: ReplaceClassMapping
+          args: {
+            label_mapping: *anno_label_mapping
+            }
+model:
+  module: seg2ml.models.segformer
+  name: PretrainedSegFormer
+  args:
+    img_size: *img_resize
+    drop_out: 0.25
+    pretrained: False
+    model_path: nvidia/segformer-b3-finetuned-ade-512-512
+    seed: !gs [0,1,2,3,4]
+    num_classes: *out_seg_channels
+    loss_function:
+      module: seg2ml.loss.segmentation_losses
+      name: DiceLoss
+      args: 
+        num_classes: *out_seg_channels
+    
+    # metrics added in the model
+    metrics:
+    - module: seg2ml.metrics.segmentation_metrics
+      name: DiceScore
+      args: 
+        num_classes: *out_seg_channels
+    - module: seg2ml.metrics.segmentation_metrics
+      name: JaccardIndex
+      args: 
+        num_classes: *out_seg_channels
+    optimizer:
+      module: torch.optim
+      name: AdamW
+      args: 
+        #lr: !gs [0.0001]
+        lr: 0.0001
+        weight_decay: 0.1
+    log_on_step: False #log metrics on every step or not
+
+trainer:
+  max_epochs: 150
+  accumulate_grad_batches: 4
+  log_every_n_steps: *batch_size
+  enable_progress_bar: True
+  accelerator: gpu
+  strategy: ddp
+  devices: [0, 1]
+  reload_dataloaders_every_n_epochs: 1 #default:0 This parameter ensure that optimizer is recreated every n epoch
+  
+callbacks:
+  - module: seg2ml.utils.callbacks
+    name: TrainLoaderSwitchCallback
+    args:
+      warmup_epochs: *warmup_epochs
+
+  - module: seg2ml.utils.callbacks
+    name: MetricSmoothingCallback
+    args: 
+      monitor: valid/DiceScore
+      window_size: 5
+    
+  # - module: pytorch_lightning.callbacks
+  #   name: EarlyStopping
+  #   args: 
+  #     monitor: smoothed_valid/DiceScore
+  #     patience: 25
+  #     mode: max
+  #     verbose: True
+
+  - module: seg2ml.utils.callbacks
+    name: EarlyStoppingAfterWarmup
+    args: 
+      monitor: smoothed_valid/DiceScore
+      patience: 25
+      mode: max
+      verbose: True
+      warmup_epochs: *warmup_epochs
+  
+  - module: seg2ml.utils.callbacks
+    name: ReduceLROnPlateauCallback
+    args: 
+      monitor: valid/loss
+      mode: min
+      factor: 0.5
+      patience: 10
+      verbose: true
+      min_lr: 0.000001
+
+model_checkpoints:
+  save_checkpoints: ./results/logging/
+  best_model_metric: valid/DiceScore
+  checkpoints_dir: ./results/checkpoints/
+
+
+

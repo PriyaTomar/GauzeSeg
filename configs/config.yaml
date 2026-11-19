@@ -1,0 +1,75 @@
+run: test_old_vid_old_code_filter_only_gauze
+logging:
+  save_dir: ./results/logging/
+  wandb_logging: True
+  wandb_project_name: ukb_surgery
+
+dataset:
+  data_root_dir: ./data
+  dataset_name: dV_Pankreas_pseudonymisiert_cut
+  input_dir_name: img
+  anno_dir_name: masks_machine
+
+dataloader:
+  split_config:
+    # but the dataset might contain the extra samples of swab class not containing the gauze at all
+    # train_idx: [1, 5, 6, 9, 14, 16] 
+    train_idx: [1, 4, 6, 9, 10, 11, 14, 16, 18, 19, 21]
+    # val_idx: [10, 22] 
+    val_idx: [3, 17]
+
+  #max_size: 100
+  batch_size: 64
+  num_workers: 8
+  transform:
+    random_transform: False
+    anno_binary_map: True
+    image_dims: !!python/tuple [270, 480]
+    # binary segmentation of gauze v/s background, combine all gauzes
+    label_mapping: {1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 1}
+  
+model:
+  module: seg2ml.models.unet
+  name: UNet
+  args:
+    loss_function:
+      module: torch.nn
+      name: CrossEntropyLoss
+      args: {}
+      # module: seg2ml.loss.segmentation_losses
+      # name: SigmoidFocalLoss
+      # args: {
+      #   alpha: ![]
+      #   gamma: ![]
+      # }
+      
+      # module: seg2ml.loss.segmentation_losses
+      # name: SCELoss
+      # args: 
+      #   alpha: !gs [0.1, 0.01] 
+      #   beta: !gs [1.0, 2.0]
+      
+    # metrics added in the model
+    metrics:
+    - module: seg2ml.metrics.segmentation_metrics
+      name: DiceScore
+    - module: seg2ml.metrics.segmentation_metrics
+      name: JaccardIndex
+    optimizer:
+      module: torch.optim
+      name: Adam
+      args: { 
+        lr: 0.0001}
+
+trainer:
+  max_epochs: 100
+  log_every_n_steps: 4
+  enable_progress_bar: True
+  accelerator: gpu
+  #devices: [0]
+  reload_dataloaders_every_n_epochs: 0 #default:0 This parameter ensure that optimizer is recreated every n epoch
+
+model_checkpoints:
+  save_checkpoints: ./results/logging/
+  best_model_metric: valid/DiceScore_epoch
+  checkpoints_dir: ./results/checkpoints/

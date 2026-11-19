@@ -1,0 +1,25 @@
+__pycache__/
+
+# Package Files
+*.egg-info
+.vscode/
+settings.json
+
+videovenv
+logs
+ukb_data/
+results/
+wandb/
+zenodo_data/
+pre_trained-models/
+build/
+*lightning_logs/
+*.pth
+*.pt
+*.png
+!docs/images/*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
